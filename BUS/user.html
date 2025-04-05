@@ -1,0 +1,44 @@
+<!-- user.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Map</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+</head>
+<body>
+    <h1>Bus Location</h1>
+    <button onclick="recenterMap()">Recenter</button>
+    <div id="map" style="height: 600px;"></div>
+    <script>
+        var map = L.map('map').setView([25.536, 84.853], 15);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+        
+        var busIcon = L.icon({
+            iconUrl: 'https://upload.wikimedia.org/wikipedia/commons/8/88/Map_marker.svg',
+            iconSize: [40, 40]
+        });
+        
+        var busMarker = L.marker([0, 0], {icon: busIcon}).addTo(map);
+        var staticMarker1 = L.marker([25.53226, 84.85265], {icon: L.divIcon({className: 'custom-marker-red', html: '📍', iconSize: [30, 30]})}).addTo(map);
+        var staticMarker2 = L.marker([25.54042, 84.85342], {icon: L.divIcon({className: 'custom-marker-blue', html: '📍', iconSize: [30, 30]})}).addTo(map);
+
+        function updateLocation() {
+            fetch('backend.php')
+                .then(response => response.json())
+                .then(data => {
+                    busMarker.setLatLng([data.lat, data.lon]);
+                    map.setView([data.lat, data.lon], 15);
+                });
+        }
+        
+        function recenterMap() {
+            map.setView(busMarker.getLatLng(), 15);
+        }
+        
+        setInterval(updateLocation, 3000);
+    </script>
+</body>
+</html>
