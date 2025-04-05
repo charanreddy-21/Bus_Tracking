@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Start Ride</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="container">
+    <h2>Ride Info</h2>
+    <form id="rideForm">
+      <label>Start Point:</label>
+      <select id="startPoint">
+        <option value="Hostel">Hostel</option>
+        <option value="College">College</option>
+      </select><br /><br />
+      <label>End Point:</label>
+      <select id="endPoint">
+        <option value="College">College</option>
+        <option value="Hostel">Hostel</option>
+      </select><br /><br />
+      <label>Bus ID:</label>
+      <input type="text" id="busId" required /><br /><br />
+      <button type="button" onclick="startRide()">Start Ride</button>
+    </form>
+  </div>
+
+  <script>
+    let watchId;
+    function startRide() {
+      const start = document.getElementById("startPoint").value;
+      const end = document.getElementById("endPoint").value;
+      const busId = document.getElementById("busId").value;
+
+      if (navigator.geolocation) {
+        watchId = navigator.geolocation.watchPosition(
+          position => {
+            const data = {
+              start,
+              end,
+              busId,
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude,
+              timestamp: new Date().toISOString()
+            };
+
+            fetch("backend.php", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(data)
+            });
+          },
+          error => alert("Location access denied."),
+          { enableHighAccuracy: true }
+        );
+      } else {
+        alert("Geolocation not supported.");
+      }
+    }
+  </script>
+</body>
+</html>
