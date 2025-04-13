@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Live Bus Tracker</title>
+    <meta charset="utf-8" />
+    <style>
+        #map {
+            height: 100vh;
+            width: 100%;
+        }
+
+        .controls {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            z-index: 1001;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .controls button {
+            padding: 6px 12px;
+            font-size: 14px;
+            border: none;
+            background: #333;
+            color: white;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        #busPanel {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: white;
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.2);
+            z-index: 1000;
+            max-height: 90vh;
+            width: 300px;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+
+        #busPanel.collapsed #busInfo {
+            display: none;
+        }
+
+        #panelHeader {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: bold;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        details summary {
+            cursor: pointer;
+            font-weight: bold;
+        }
+    </style>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+</head>
+<body>
+    <div class="controls">
+        <button onclick="recenterMap()">Recenter</button>
+        <button onclick="updateBusData()">Refresh</button>
+    </div>
+
+    <div id="busPanel">
+        <div id="panelHeader" onclick="togglePanel()">
+            🚌 Bus Details
+            <span id="toggleArrow">🔼</span>
+        </div>
+        <div id="busInfo">Loading bus data...</div>
+    </div>
+
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        const map = L.map('map').setView([25.540902, 84.853709], 15);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: 'Map data ©️ <a href="https://openstreetmap.org">OpenStreetMap</a>',
+        }).addTo(map);
+
+        const hostelLatLng = [25.540902, 84.853709];
+        const collegeLatLng = [25.532338052612428, 84.8520585045419];
+
+        const redIcon = new L.Icon({
+            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
+            shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+            iconSize: [25, 41],
+            iconAnchor: [12, 41],
+            popupAnchor: [1, -34],
+            shadowSize: [41, 41]
+        });
+
+        L.marker(hostelLatLng, { icon: redIcon }).addTo(map).bindPopup('Start: Hostel');
+        L.marker(collegeLatLng, { icon: redIcon }).addTo(map).bindPopup('Destination: College');
+
+        const markers = {};
+        const speedLogs = {};
+        const maxQueueLength = 5;
+        const busColors = ['blue', 'orange', 'purple', 'yellow', 'pink'];
+        const notifiedBuses = new Set(); // Track notified buses
+
+        function getBusIcon(color) {
+            return L.icon({
+                iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-${color}.png`,
+                shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+                iconSize: [25, 41],
+                iconAnchor: [12, 41],
+                popupAnchor: [1, -34],
+                shadowSize: [41, 41]
+            });
+        }
+
+        function haversineDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371e3;
+            const toRad = x => x * Math.PI / 180;
+            const φ1 = toRad(lat1), φ2 = toRad(lat2);
+            const Δφ = toRad(lat2 - lat1), Δλ = toRad(lon2 - lon1);
+            const a = Math.sin(Δφ / 2) ** 2 +
+                      Math.cos(φ1) * Math.cos(φ2) *
+                      Math.sin(Δλ / 2) ** 2;
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return R * c;
+        }
+
+        function updateBusData() {
+            fetch('data.json')
+                .then(res => res.json())
+                .then(data => {
+                    const infoContainer = document.getElementById("busInfo");
+                    infoContainer.innerHTML = "";
+
+                    if (!Array.isArray(data) || data.length === 0) {
+                        infoContainer.innerHTML = `<p>No active buses at the moment.</p>`;
+                        return;
+                    }
+
+                    data.forEach(bus => {
+                        const { latitude, longitude } = bus;
+                        bus.distanceToDest = haversineDistance(latitude, longitude, collegeLatLng[0], collegeLatLng[1]);
+                    });
+
+                    function heapify(arr, n, i) {
+                        let smallest = i;
+                        const l = 2 * i + 1;
+                        const r = 2 * i + 2;
+
+                        if (l < n && arr[l].distanceToDest < arr[smallest].distanceToDest)
+                            smallest = l;
+                        if (r < n && arr[r].distanceToDest < arr[smallest].distanceToDest)
+                            smallest = r;
+
+                        if (smallest !== i) {
+                            [arr[i], arr[smallest]] = [arr[smallest], arr[i]];
+                            heapify(arr, n, smallest);
+                        }
+                    }
+
+                    function heapSort(arr) {
+                        const n = arr.length;
+                        for (let i = Math.floor(n / 2) - 1; i >= 0; i--) {
+                            heapify(arr, n, i);
+                        }
+                        for (let i = n - 1; i > 0; i--) {
+                            [arr[0], arr[i]] = [arr[i], arr[0]];
+                            heapify(arr, i, 0);
+                        }
+                        arr.reverse();
+                    }
+
+                    heapSort(data);
+
+                    data.forEach((bus, index) => {
+                        const { busId, latitude, longitude, timestamp, start, end } = bus;
+                        const color = busColors[index % busColors.length];
+                        const latLng = [latitude, longitude];
+                        const currentTime = new Date(timestamp).getTime();
+
+                        if (!speedLogs[busId]) speedLogs[busId] = [];
+                        speedLogs[busId].push({ lat: latitude, lon: longitude, time: currentTime });
+                        if (speedLogs[busId].length > maxQueueLength) {
+                            speedLogs[busId].shift();
+                        }
+
+                        if (!markers[busId]) {
+                            markers[busId] = L.marker(latLng, {
+                                icon: getBusIcon(color)
+                            }).addTo(map).bindPopup(`🚌 Bus ${busId}`);
+                        } else {
+                            markers[busId].setLatLng(latLng);
+                        }
+
+                        let avgSpeed = 0, rash = "No";
+                        const history = speedLogs[busId];
+                        if (history.length >= 2) {
+                            let totalDist = 0, totalTime = 0;
+                            for (let i = 1; i < history.length; i++) {
+                                const dist = haversineDistance(
+                                    history[i-1].lat, history[i-1].lon,
+                                    history[i].lat, history[i].lon
+                                );
+                                const timeDiff = (history[i].time - history[i-1].time) / 1000;
+                                if (timeDiff > 0) {
+                                    totalDist += dist;
+                                    totalTime += timeDiff;
+                                }
+                            }
+                            if (totalTime > 0) {
+                                avgSpeed = (totalDist / totalTime) * 3.6;
+                            }
+                            const acc = (avgSpeed - 0) / totalTime;
+                            if (avgSpeed > 60 || acc > 2.5) rash = "Yes";
+                        }
+
+                        const distanceToDestKm = (bus.distanceToDest / 1000).toFixed(2);
+                        const eta = avgSpeed > 0 ? (bus.distanceToDest / 1000 / avgSpeed * 60).toFixed(1) : "--";
+                        const secondsAgo = Math.floor((Date.now() - currentTime) / 1000);
+                        const crowd = ["Low", "Moderate", "High"][Math.floor(Math.random() * 3)];
+
+                        // 🚨 Trigger popup if bus is within 100m and not yet notified
+                        if (bus.distanceToDest <= 100 && !notifiedBuses.has(busId)) {
+                            showArrivalNotification(busId);
+                            notifiedBuses.add(busId);
+                        }
+
+                        const info = `
+                            <details open>
+                                <summary>Bus ID: ${busId} <span style="color:${color}">(${color})</span></summary>
+                                <div>
+                                    <b>Start:</b> ${start}<br>
+                                    <b>End:</b> ${end}<br>
+                                    <b>Latitude:</b> ${latitude.toFixed(4)}<br>
+                                    <b>Longitude:</b> ${longitude.toFixed(4)}<br>
+                                    <b>Updated:</b> ${secondsAgo} sec ago<br>
+                                    <b>Distance to Destination:</b> ${distanceToDestKm} km<br>
+                                    <b>ETA:</b> ${eta} min<br>
+                                    <b>Avg Speed:</b> ${avgSpeed.toFixed(2)} km/h<br>
+                                    <b>Rash Driving:</b> ${rash}<br>
+                                    <b>Crowd Estimate:</b> ${crowd}<br>
+                                </div>
+                            </details>
+                        `;
+                        infoContainer.innerHTML += info;
+                    });
+                })
+                .catch(err => {
+                    console.error("Error fetching bus data:", err);
+                });
+        }
+
+        function togglePanel() {
+            const panel = document.getElementById("busPanel");
+            const arrow = document.getElementById("toggleArrow");
+
+            if (panel.classList.contains("collapsed")) {
+                panel.classList.remove("collapsed");
+                arrow.innerHTML = "🔼";
+            } else {
+                panel.classList.add("collapsed");
+                arrow.innerHTML = "🔽";
+            }
+        }
+
+        function recenterMap() {
+            map.setView(hostelLatLng, 15);
+        }
+
+        function showArrivalNotification(busId) {
+            if (document.getElementById(`popup-${busId}`)) return;
+
+            const popup = document.createElement("div");
+            popup.id = `popup-${busId}`;
+            popup.style.position = "fixed";
+            popup.style.bottom = "20px";
+            popup.style.right = "20px";
+            popup.style.background = "#fefefe";
+            popup.style.border = "1px solid #ccc";
+            popup.style.borderLeft = "5px solid green";
+            popup.style.padding = "12px 16px";
+            popup.style.zIndex = "2000";
+            popup.style.boxShadow = "0 2px 8px rgba(0,0,0,0.2)";
+            popup.style.borderRadius = "8px";
+            popup.style.minWidth = "250px";
+            popup.style.fontFamily = "Arial, sans-serif";
+
+            popup.innerHTML = `
+                <strong>🚌 Bus ${busId}</strong><br>
+                is arriving soon (within 100m)!<br><br>
+                <button onclick="this.parentElement.remove()" style="background:#c00; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;">❌ Close</button>
+            `;
+
+            document.body.appendChild(popup);
+        }
+
+        updateBusData();
+        setInterval(updateBusData, 5000);
+    </script>
+</body>
+</html>
