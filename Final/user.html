@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <link rel ="icon" type ="image/png" href = "images/favicon.jpeg">
     <title>Live Bus Tracker</title>
     <meta charset="utf-8" />
     <style>
@@ -84,7 +85,7 @@
     <script>
         const map = L.map('map').setView([25.540902, 84.853709], 15);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: 'Map data ©️ <a href="https://openstreetmap.org">OpenStreetMap</a>',
+            attribution: 'Map info from <a href="https://openstreetmap.org">OpenStreetMap</a>',
         }).addTo(map);
 
         const hostelLatLng = [25.540902, 84.853709];
@@ -106,7 +107,7 @@
         const speedLogs = {};
         const maxQueueLength = 5;
         const busColors = ['blue', 'orange', 'purple', 'yellow', 'pink'];
-        const notifiedBuses = new Set(); // Track notified buses
+        const notifiedBuses = new Set();
 
         function getBusIcon(color) {
             return L.icon({
@@ -120,13 +121,13 @@
         }
 
         function haversineDistance(lat1, lon1, lat2, lon2) {
-            const R = 6371e3;
-            const toRad = x => x * Math.PI / 180;
+            const R = 6371000;
+            const toRad = val => val * Math.PI / 180;
             const φ1 = toRad(lat1), φ2 = toRad(lat2);
-            const Δφ = toRad(lat2 - lat1), Δλ = toRad(lon2 - lon1);
-            const a = Math.sin(Δφ / 2) ** 2 +
+            const dLat = toRad(lat2 - lat1), dLon = toRad(lon2 - lon1);
+            const a = Math.sin(dLat / 2) ** 2 +
                       Math.cos(φ1) * Math.cos(φ2) *
-                      Math.sin(Δλ / 2) ** 2;
+                      Math.sin(dLon / 2) ** 2;
             const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
             return R * c;
         }
@@ -135,11 +136,11 @@
             fetch('data.json')
                 .then(res => res.json())
                 .then(data => {
-                    const infoContainer = document.getElementById("busInfo");
-                    infoContainer.innerHTML = "";
+                    const infoBox = document.getElementById("busInfo");
+                    infoBox.innerHTML = "";
 
                     if (!Array.isArray(data) || data.length === 0) {
-                        infoContainer.innerHTML = `<p>No active buses at the moment.</p>`;
+                        infoBox.innerHTML = "<p>No active buses at the moment.</p>";
                         return;
                     }
 
@@ -150,13 +151,13 @@
 
                     function heapify(arr, n, i) {
                         let smallest = i;
-                        const l = 2 * i + 1;
-                        const r = 2 * i + 2;
+                        const left = 2 * i + 1;
+                        const right = 2 * i + 2;
 
-                        if (l < n && arr[l].distanceToDest < arr[smallest].distanceToDest)
-                            smallest = l;
-                        if (r < n && arr[r].distanceToDest < arr[smallest].distanceToDest)
-                            smallest = r;
+                        if (left < n && arr[left].distanceToDest < arr[smallest].distanceToDest)
+                            smallest = left;
+                        if (right < n && arr[right].distanceToDest < arr[smallest].distanceToDest)
+                            smallest = right;
 
                         if (smallest !== i) {
                             [arr[i], arr[smallest]] = [arr[smallest], arr[i]];
@@ -207,25 +208,26 @@
                                     history[i-1].lat, history[i-1].lon,
                                     history[i].lat, history[i].lon
                                 );
-                                const timeDiff = (history[i].time - history[i-1].time) / 1000;
-                                if (timeDiff > 0) {
+                                const timeGap = (history[i].time - history[i-1].time) / 1000;
+                                if (timeGap > 0) {
                                     totalDist += dist;
-                                    totalTime += timeDiff;
+                                    totalTime += timeGap;
                                 }
                             }
                             if (totalTime > 0) {
                                 avgSpeed = (totalDist / totalTime) * 3.6;
                             }
-                            const acc = (avgSpeed - 0) / totalTime;
-                            if (avgSpeed > 60 || acc > 2.5) rash = "Yes";
+                            const acceleration = avgSpeed / totalTime;
+                            if (avgSpeed > 60 || acceleration > 2.5) rash = "Yes";
                         }
 
-                        const distanceToDestKm = (bus.distanceToDest / 1000).toFixed(2);
+                        const distKm = (bus.distanceToDest / 1000).toFixed(2);
                         const eta = avgSpeed > 0 ? (bus.distanceToDest / 1000 / avgSpeed * 60).toFixed(1) : "--";
                         const secondsAgo = Math.floor((Date.now() - currentTime) / 1000);
+                        // The crowd function is for future use. THe proper logic is not written as of yet;
+                        // We tried few methods which turned out to be not so effecient,will work on it in near future🤞🏻;
                         const crowd = ["Low", "Moderate", "High"][Math.floor(Math.random() * 3)];
 
-                        // 🚨 Trigger popup if bus is within 100m and not yet notified
                         if (bus.distanceToDest <= 100 && !notifiedBuses.has(busId)) {
                             showArrivalNotification(busId);
                             notifiedBuses.add(busId);
@@ -240,7 +242,7 @@
                                     <b>Latitude:</b> ${latitude.toFixed(4)}<br>
                                     <b>Longitude:</b> ${longitude.toFixed(4)}<br>
                                     <b>Updated:</b> ${secondsAgo} sec ago<br>
-                                    <b>Distance to Destination:</b> ${distanceToDestKm} km<br>
+                                    <b>Distance to Destination:</b> ${distKm} km<br>
                                     <b>ETA:</b> ${eta} min<br>
                                     <b>Avg Speed:</b> ${avgSpeed.toFixed(2)} km/h<br>
                                     <b>Rash Driving:</b> ${rash}<br>
@@ -248,11 +250,11 @@
                                 </div>
                             </details>
                         `;
-                        infoContainer.innerHTML += info;
+                        infoBox.innerHTML += info;
                     });
                 })
                 .catch(err => {
-                    console.error("Error fetching bus data:", err);
+                    console.error("Couldn’t fetch bus data:", err);
                 });
         }
 

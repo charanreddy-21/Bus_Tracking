@@ -1,38 +1,47 @@
 <?php
+
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Headers: Content-Type");
 header("Content-Type: application/json");
 
-// Get incoming JSON
+//read the incoming JSON data and convert it into an array
 $data = json_decode(file_get_contents("php://input"), true);
 
-// Validate all required fields
-if ($data && isset($data['start'], $data['end'], $data['busId'], $data['latitude'], $data['longitude'], $data['timestamp'])) {
-    $file = 'data.json';
+// Check if all the required fields are there
+if($data && isset($data['start'], $data['end'], $data['busId'], $data['latitude'], $data['longitude'], $data['timestamp'])){
+    
+// Path to the file where we'll store the data
+$file = 'data.json';
 
-    // Load existing data
-    $rides = file_exists($file) ? json_decode(file_get_contents($file), true) : [];
+// Check if the file exists already, if yes, load it, otherwise use an empty array
+$rides = file_exists($file) ? json_decode(file_get_contents($file), true) : [];
 
-    // Overwrite existing data for same busId
-    $updated = false;
-    foreach ($rides as &$ride) {
-        if ($ride['busId'] === $data['busId']) {
-            $ride = $data;
-            $updated = true;
-            break;
-        }
-    }
-    unset($ride);
+// Flag to track if we updated an existing entry
+$updated = false;
 
-    if (!$updated) {
-        $rides[] = $data;
-    }
+// Go through each ride and see if there's one with the same busId
+foreach($rides as &$ride){
+if($ride['busId'] === $data['busId']){
+// If found, update that ride with the new data
+$ride = $data;
+$updated = true;
+break;
+}
+}
+unset($ride); // just cleaning up the reference
 
-    // Save updated list
-    file_put_contents($file, json_encode($rides, JSON_PRETTY_PRINT));
+// If we didn’t find any matching busId, just add this one as new one
+if(!$updated){
+$rides[] = $data;
+}
 
-    echo json_encode(["status" => "success", "message" => "✅ Ride data saved."]);
-} else {
-    echo json_encode(["status" => "error", "message" => "❌ Invalid data format."]);
+// Save everything back to the file in a readable format
+file_put_contents($file, json_encode($rides, JSON_PRETTY_PRINT));
+
+// Send a success message back
+echo json_encode(["status" => "success", "message" => "Ride data saved."]);
+}else{
+// If the input data wasn’t valid, send an error message
+echo json_encode(["status" => "error", "message" => "Invalid data format."]);
 }
 ?>
