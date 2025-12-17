@@ -252,12 +252,10 @@ body {
     display: none;
   }
 }
-/* General label styling (if needed elsewhere) */
 .forms .form-content label {
   cursor: pointer;
 }
 
-/* Specific styling for "Login now" and "Signup now" labels */
 .forms .form-content .sign-up-text label {
   color: #000000; /* black */
   font-weight: 600;
@@ -269,13 +267,14 @@ body {
 
 
 .flip-link {
-  color: #3498db; /* Choose any color you like */
+  color: #3498db;
   cursor: pointer;
   font-weight: 600;
   transition: color 0.3s ease;
 }
 
 .flip-link:hover {
-  color: #1d6fa5; /* Darker shade on hover */
+  color: #1d6fa5; 
   text-decoration: underline;
 }
+
